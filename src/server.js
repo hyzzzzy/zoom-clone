@@ -27,9 +27,39 @@ const handleConnection = (socket) => {
   console.log(socket);
 }
 
+const sockets = [];
+
 // 연결 리스너
 // callback으로 socket을 받음
-wss.on('connection', handleConnection);
+wss.on('connection', (socket) => {
+  // 연결된 socket을 배열에 담음
+  sockets.push(socket);
+
+  // 익명 유저
+  socket['nickname'] = 'Anonymous';
+
+  console.log('Connected to Browser');
+
+  socket.on('close', () => {
+    console.log('Disconnected from the Browser');
+  });
+
+  socket.on('message', (message) => {
+    const formattedMsg = Buffer.from(message, 'base64').toString('utf-8');
+    const parsedMsg = JSON.parse(formattedMsg);
+
+    switch(parsedMsg.type) {
+      case 'new_message': {
+        sockets.forEach(aSocket => aSocket.send(`${socket.nickname}: ${parsedMsg.payload}`));
+        break;
+      }
+      case 'nickname': {
+        socket['nickname'] = parsedMsg.payload;
+        break;
+      }
+    }
+  });
+});
 
 // http, ws 같은 포트번호 사용
 server.listen(3000, handleListen);
