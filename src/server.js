@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { Server } from "socket.io";
+import { instrument } from '@socket.io/admin-ui';
 
 const app = express();
 
@@ -17,7 +18,17 @@ const handleListen = () => console.log(`Listening on http://localhost:3000`);
 
 // http 서버
 const httpServer = http.createServer(app);
-const wsServer = new Server(httpServer);
+const wsServer = new Server(httpServer, {
+  cors: {
+    origin: ['https://admin.socket.io'],
+    credentials: true,
+  },
+});
+
+// socket.io admin ui
+instrument(wsServer, {
+  auth: false,
+});
 
 function publicRooms() {
   const {
@@ -34,6 +45,10 @@ function publicRooms() {
   });
 
   return publicRooms;
+}
+
+function countRoom(roomName) {
+  return wsServer.sockets.adapter.rooms.get(roomName)?.size;
 }
 
 
@@ -57,14 +72,15 @@ wsServer.on('connection', socket => {
     // console.log(socket.rooms);
     
     done();
-    socket.to(roomName).emit('welcome', socket.nickname);
+    socket.to(roomName).emit('welcome', socket.nickname, countRoom(roomName));
     wsServer.sockets.emit('room_change', publicRooms());
   });
 
   // 페이지를 떠나기 직전
   socket.on('disconnecting', () => {
     socket.rooms.forEach(room => {
-      socket.to(room).emit('bye', socket.nickname);
+      // 아직 사용자가 나간건 아니라 -1
+      socket.to(room).emit('bye', socket.nickname, countRoom(room) - 1);
     });
   });
 
